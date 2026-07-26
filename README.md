@@ -124,6 +124,12 @@ flutter pub get
 flutter run
 ```
 
+After changing `assets/icons/app_icon.png`, regenerate platform icons:
+
+```bash
+dart run flutter_launcher_icons
+```
+
 Register two accounts on two devices/emulators (or web + device) to test real-time chat.
 
 ## Test
