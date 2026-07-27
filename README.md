@@ -72,35 +72,68 @@ Config already present:
 ### Enable services in Firebase Console
 
 1. **Authentication** → Sign-in method → enable **Email/Password**
-2. **Firestore Database** → Create database (start in test mode for development, then tighten rules)
+2. **Firestore Database** → Create database and publish the rules below
 
-### Suggested Firestore rules (development)
+### Firestore rules
+
+Rules live in `firestore.rules` and are applied in the Firebase Console:
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    function signedIn() {
+      return request.auth != null;
     }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isChatParticipant() {
+      return signedIn()
+        && request.auth.uid in
+          get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow write: if isOwner(userId);
+    }
+
     match /chats/{chatId} {
-      allow read, write: if request.auth != null
+      allow read: if signedIn()
         && request.auth.uid in resource.data.participants;
-      allow create: if request.auth != null;
+      allow create: if signedIn()
+        && request.auth.uid in request.resource.data.participants;
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.participants;
+
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read: if isChatParticipant();
+
+        allow create: if signedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && request.auth.uid in [
+            request.resource.data.senderId,
+            request.resource.data.receiverId
+          ]
+          && (
+            !exists(/databases/$(database)/documents/chats/$(chatId))
+            || request.auth.uid in
+              get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          );
+
+        allow update, delete: if signedIn()
+          && resource.data.senderId == request.auth.uid
+          && isChatParticipant();
       }
     }
   }
 }
 ```
 
-> For production, restrict message writes to `senderId == auth.uid` and validate chat membership carefully.
-
-### Password reset flow (free Spark plan)
-
-Uses Firebase Auth only — no Cloud Functions / Blaze plan required.
+### Password reset flow
 
 1. **Forgot password** — sends Firebase’s password-reset email  
 2. **Reset password** — paste the `oobCode` from the email link URL, then set a new password  
