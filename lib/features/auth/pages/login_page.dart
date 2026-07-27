@@ -92,6 +92,7 @@ class _LoginPageState extends State<LoginPage> with FieldValidation {
         }
 
         return AuthPageScaffold(
+          showBackButton: false,
           child: Form(
             key: _formKey,
             child: Column(
